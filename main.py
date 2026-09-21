@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 
 # ============================================================
-# 1. 기본 설정
+# 1. 기본 화면 설정
 # ============================================================
 
 st.set_page_config(
@@ -24,13 +24,20 @@ st.caption("영화진흥위원회(KOBIS) 일일 박스오피스 기준")
 # 2. 한국 시간 기준으로 '어제' 계산
 # ============================================================
 
-korea_now = datetime.now(ZoneInfo("Asia/Seoul"))
+korea_now = datetime.now(
+    ZoneInfo("Asia/Seoul")
+)
 
-yesterday = korea_now.date() - timedelta(days=1)
+yesterday = (
+    korea_now.date()
+    - timedelta(days=1)
+)
 
 target_date = yesterday.strftime("%Y%m%d")
 
-display_date = yesterday.strftime("%Y년 %m월 %d일")
+display_date = yesterday.strftime(
+    "%Y년 %m월 %d일"
+)
 
 
 # ============================================================
@@ -38,16 +45,22 @@ display_date = yesterday.strftime("%Y년 %m월 %d일")
 # ============================================================
 
 try:
+
     kobis_key = st.secrets["KOBIS_KEY"]
 
 except Exception:
 
-    st.error("⚠️ KOBIS 인증키를 찾을 수 없습니다.")
+    st.error(
+        "⚠️ KOBIS 인증키를 찾을 수 없습니다."
+    )
 
     st.info(
         """
-        Streamlit Cloud의 Settings → Secrets에서 다음과 같이
-        입력했는지 확인하세요.
+        Streamlit Cloud의
+
+        Settings → Secrets
+
+        에 다음과 같이 입력했는지 확인하세요.
 
         KOBIS_KEY = "본인의_실제_인증키"
 
@@ -84,7 +97,7 @@ MOVIE_INFO_URL = (
 
 def request_kobis(url, params):
     """
-    KOBIS API에 요청을 보내고 결과를 반환합니다.
+    KOBIS API에 요청을 보내고 JSON 데이터를 반환합니다.
     """
 
     try:
@@ -101,37 +114,45 @@ def request_kobis(url, params):
 
     except requests.exceptions.Timeout:
 
-        return None, "KOBIS API 요청 시간이 초과되었습니다."
+        return None, (
+            "KOBIS API 요청 시간이 초과되었습니다."
+        )
 
     except requests.exceptions.RequestException:
 
-        return None, "KOBIS API에 연결하지 못했습니다."
+        return None, (
+            "KOBIS API에 연결하지 못했습니다."
+        )
 
     except ValueError:
 
-        return None, "KOBIS에서 올바른 JSON 데이터를 받지 못했습니다."
+        return None, (
+            "KOBIS에서 올바른 JSON 데이터를 "
+            "받지 못했습니다."
+        )
 
 
-    # KOBIS는 인증키가 잘못되어도 HTTP 200을 반환할 수 있기 때문에
-    # faultInfo를 직접 확인합니다.
+    # KOBIS는 인증키가 잘못되어도
+    # HTTP 상태코드가 200일 수 있습니다.
+    # 따라서 faultInfo를 직접 확인합니다.
 
     if "faultInfo" in data:
 
         fault = data["faultInfo"]
 
-        message = fault.get(
-            "message",
-            "알 수 없는 KOBIS 오류"
-        )
-
-        code = fault.get(
+        error_code = fault.get(
             "errorCode",
             "알 수 없음"
         )
 
+        error_message = fault.get(
+            "message",
+            "알 수 없는 오류"
+        )
+
         return None, (
-            f"오류 코드: {code}\n"
-            f"오류 내용: {message}"
+            f"오류 코드: {error_code}\n"
+            f"오류 내용: {error_message}"
         )
 
 
@@ -139,7 +160,7 @@ def request_kobis(url, params):
 
 
 # ============================================================
-# 6. 어제의 박스오피스 가져오기
+# 6. 어제의 박스오피스 요청
 # ============================================================
 
 params = {
@@ -155,7 +176,9 @@ data, error = request_kobis(
 
 if error:
 
-    st.error("⚠️ KOBIS API 요청에 실패했습니다.")
+    st.error(
+        "⚠️ KOBIS API 요청에 실패했습니다."
+    )
 
     st.info(
         f"""
@@ -180,17 +203,20 @@ if error:
 if "boxOfficeResult" not in data:
 
     st.error(
-        "⚠️ KOBIS 응답에서 박스오피스 정보를 찾을 수 없습니다."
+        "⚠️ KOBIS 응답에서 박스오피스 정보를 "
+        "찾을 수 없습니다."
     )
 
     st.info(
-        "KOBIS API의 응답 형식이 정상인지 확인한 뒤 다시 실행해 보세요."
+        "KOBIS API 응답을 확인한 뒤 다시 실행해 보세요."
     )
 
     st.stop()
 
 
-movie_list = data["boxOfficeResult"].get(
+movie_list = data[
+    "boxOfficeResult"
+].get(
     "dailyBoxOfficeList",
     []
 )
@@ -199,7 +225,8 @@ movie_list = data["boxOfficeResult"].get(
 if not movie_list:
 
     st.warning(
-        f"📭 {display_date}의 박스오피스 영화 목록이 없습니다."
+        f"📭 {display_date}의 박스오피스 "
+        "영화 목록이 없습니다."
     )
 
     st.info(
@@ -217,13 +244,14 @@ if not movie_list:
 
 
 # ============================================================
-# 8. DataFrame 만들기
+# 8. DataFrame 생성
 # ============================================================
 
 df = pd.DataFrame(movie_list)
 
 
 # 숫자 데이터 변환
+
 for column in [
     "rank",
     "audiCnt",
@@ -261,7 +289,11 @@ def get_movie_info(movie_code):
 
     try:
 
-        return data["movieInfoResult"]["movieInfo"]
+        return data[
+            "movieInfoResult"
+        ][
+            "movieInfo"
+        ]
 
     except (KeyError, TypeError):
 
@@ -272,31 +304,43 @@ def get_movie_info(movie_code):
 # 10. 영화 상세정보 수집
 # ============================================================
 
-with st.spinner("🎬 영화 정보를 불러오는 중..."):
+with st.spinner(
+    "🎬 영화 정보를 불러오는 중..."
+):
 
     movie_details = {}
 
     for _, row in df.iterrows():
 
-        movie_code = row.get("movieCd")
+        movie_code = row.get(
+            "movieCd"
+        )
 
         if movie_code:
 
-            movie_details[movie_code] = get_movie_info(
+            movie_details[
+                movie_code
+            ] = get_movie_info(
                 movie_code
             )
 
 
 # ============================================================
-# 11. 장르 / 감독 / 배우 정보 정리
+# 11. 상세정보 정리 함수
 # ============================================================
 
 def get_genres(info):
 
-    genres = info.get("genres", [])
+    genres = info.get(
+        "genres",
+        []
+    )
 
     return [
-        genre.get("genreNm", "")
+        genre.get(
+            "genreNm",
+            ""
+        )
         for genre in genres
         if genre.get("genreNm")
     ]
@@ -304,10 +348,16 @@ def get_genres(info):
 
 def get_directors(info):
 
-    directors = info.get("directors", [])
+    directors = info.get(
+        "directors",
+        []
+    )
 
     return [
-        director.get("peopleNm", "")
+        director.get(
+            "peopleNm",
+            ""
+        )
         for director in directors
         if director.get("peopleNm")
     ]
@@ -315,16 +365,24 @@ def get_directors(info):
 
 def get_actors(info):
 
-    actors = info.get("actors", [])
+    actors = info.get(
+        "actors",
+        []
+    )
 
     return [
-        actor.get("peopleNm", "")
+        actor.get(
+            "peopleNm",
+            ""
+        )
         for actor in actors[:10]
         if actor.get("peopleNm")
     ]
 
 
-# DataFrame에 상세정보 추가
+# ============================================================
+# 12. 상세정보를 DataFrame에 추가
+# ============================================================
 
 df["genres"] = ""
 df["directors"] = ""
@@ -333,28 +391,39 @@ df["actors"] = ""
 
 for index, row in df.iterrows():
 
-    movie_code = row.get("movieCd")
+    movie_code = row.get(
+        "movieCd"
+    )
 
     info = movie_details.get(
         movie_code,
         {}
     )
 
-    df.at[index, "genres"] = ", ".join(
+    df.at[
+        index,
+        "genres"
+    ] = ", ".join(
         get_genres(info)
     )
 
-    df.at[index, "directors"] = ", ".join(
+    df.at[
+        index,
+        "directors"
+    ] = ", ".join(
         get_directors(info)
     )
 
-    df.at[index, "actors"] = ", ".join(
+    df.at[
+        index,
+        "actors"
+    ] = ", ".join(
         get_actors(info)
     )
 
 
 # ============================================================
-# 12. 날짜 표시
+# 13. 날짜 표시
 # ============================================================
 
 st.subheader(
@@ -367,12 +436,14 @@ st.caption(
 
 
 # ============================================================
-# 13. 1위 영화
+# 14. 1위 영화
 # ============================================================
 
 first_movie = df.iloc[0]
 
-first_movie_name = first_movie["movieNm"]
+first_movie_name = first_movie[
+    "movieNm"
+]
 
 first_audience = int(
     first_movie["audiCnt"]
@@ -387,7 +458,9 @@ first_screen_count = int(
 )
 
 
-st.markdown("## 🏆 일일 박스오피스 1위")
+st.markdown(
+    "## 🏆 일일 박스오피스 1위"
+)
 
 st.markdown(
     f"# 🥇 {first_movie_name}"
@@ -422,10 +495,12 @@ with col3:
 
 
 # ============================================================
-# 14. 관객수 상위 5편 그래프
+# 15. 관객수 상위 5편 그래프
 # ============================================================
 
-st.markdown("## 📊 관객수 상위 5편")
+st.markdown(
+    "## 📊 관객수 상위 5편"
+)
 
 top5 = (
     df.sort_values(
@@ -437,8 +512,13 @@ top5 = (
 )
 
 chart_data = top5[
-    ["movieNm", "audiCnt"]
-].set_index("movieNm")
+    [
+        "movieNm",
+        "audiCnt"
+    ]
+].set_index(
+    "movieNm"
+)
 
 
 st.bar_chart(
@@ -449,21 +529,23 @@ st.bar_chart(
 
 
 # ============================================================
-# 15. 내 취향으로 영화 찾기
+# 16. 내 취향으로 영화 찾기
 # ============================================================
 
 st.divider()
 
-st.markdown("## 🍿 내 취향으로 영화 찾기")
+st.markdown(
+    "## 🍿 내 취향으로 영화 찾기"
+)
 
 st.write(
-    "좋아하는 장르나 영화의 특징을 입력하면 "
-    "어제의 박스오피스 영화 중 취향에 맞는 영화를 찾아줍니다."
+    "원하는 장르를 여러 개 선택하면 "
+    "**선택한 모든 장르를 포함하는 영화만** 추천합니다."
 )
 
 
 # ============================================================
-# 16. 장르 목록 만들기
+# 17. 장르 목록 만들기
 # ============================================================
 
 all_genres = []
@@ -477,12 +559,19 @@ for genres in df["genres"]:
 
             genre = genre.strip()
 
-            if genre and genre not in all_genres:
+            if (
+                genre
+                and genre not in all_genres
+            ):
 
-                all_genres.append(genre)
+                all_genres.append(
+                    genre
+                )
 
 
-# 기본 장르도 추가
+# KOBIS 데이터에 없는 장르가 있더라도
+# 선택창에 표시할 수 있도록 기본 장르 추가
+
 default_genres = [
     "액션",
     "코미디",
@@ -502,11 +591,13 @@ for genre in default_genres:
 
     if genre not in all_genres:
 
-        all_genres.append(genre)
+        all_genres.append(
+            genre
+        )
 
 
 # ============================================================
-# 17. 장르 선택
+# 18. 장르 선택
 # ============================================================
 
 selected_genres = st.multiselect(
@@ -515,22 +606,27 @@ selected_genres = st.multiselect(
 )
 
 st.caption(
-    "여러 장르를 선택하면 선택한 장르 중 하나라도 포함된 영화를 추천합니다. (OR 조건)"
+    "여러 장르를 선택하면 "
+    "선택한 장르를 모두 포함하는 영화만 추천합니다. "
+    "(AND 조건)"
 )
 
 
 # ============================================================
-# 18. 자유로운 취향 입력
+# 19. 자유 취향 입력
 # ============================================================
 
 preference = st.text_input(
-    "💭 좋아하는 영화의 분위기나 특징을 자유롭게 입력하세요",
-    placeholder="예: 긴장감 있는 영화, 반전이 있는 영화, 웃긴 영화"
+    "💭 좋아하는 영화의 특징을 입력하세요",
+    placeholder=(
+        "예: 긴장감 있는 영화, "
+        "반전이 있는 영화"
+    )
 )
 
 
 # ============================================================
-# 19. 추천 버튼
+# 20. 추천 버튼
 # ============================================================
 
 recommend_button = st.button(
@@ -540,78 +636,74 @@ recommend_button = st.button(
 
 
 # ============================================================
-# 20. 추천 알고리즘
+# 21. 영화 추천
 # ============================================================
 
 if recommend_button:
 
-    if not selected_genres and not preference.strip():
+    # 아무것도 선택하지 않은 경우
+
+    if (
+        not selected_genres
+        and not preference.strip()
+    ):
 
         st.warning(
-            "장르를 하나 이상 선택하거나 영화의 특징을 입력해주세요."
+            "장르를 하나 이상 선택하거나 "
+            "영화의 특징을 입력해주세요."
         )
 
     else:
 
         result_df = df.copy()
 
-        result_df["recommend_score"] = 0.0
+        result_df[
+            "recommend_score"
+        ] = 0.0
 
 
         # ====================================================
-        # ⭐ 핵심: 장르 OR 조건
-        # ====================================================
-        #
-        # 선택한 장르가 여러 개라면
-        #
-        # 액션 OR SF OR 스릴러
-        #
-        # 중 하나라도 영화에 포함되면 추천 대상입니다.
-        #
-        # 예:
-        # 영화 장르 = "액션, SF"
-        # 선택 장르 = ["액션", "로맨스"]
-        #
-        # → 액션이 있으므로 추천 대상
-        #
-        # 영화 장르 = "드라마"
-        # 선택 장르 = ["액션", "SF"]
-        #
-        # → 둘 다 없으므로 추천 대상에서 제외
+        # ⭐ 핵심: 선택한 장르를 '모두' 만족해야 함
         # ====================================================
 
         if selected_genres:
 
-            genre_match = result_df["genres"].apply(
-                lambda movie_genres: any(
+            genre_match = result_df[
+                "genres"
+            ].apply(
+                lambda movie_genres: all(
                     selected_genre in movie_genres
-                    for selected_genre in selected_genres
+                    for selected_genre
+                    in selected_genres
                 )
             )
 
-            # 선택한 장르 중 하나라도 있으면
-            # 추천 점수를 크게 부여합니다.
 
-            result_df.loc[
-                genre_match,
+            # 선택한 장르를 모두 포함하는 영화만
+            # 추천 대상에 남깁니다.
+
+            result_df = result_df[
+                genre_match
+            ].copy()
+
+
+            # 선택한 장르를 모두 만족한 영화이므로
+            # 장르 조건을 만족했다는 점수를 부여합니다.
+
+            result_df[
                 "recommend_score"
             ] += 10
-
-
-            # 장르가 하나라도 맞지 않는 영화는
-            # 추천 우선순위가 크게 낮아지도록 합니다.
-
-            result_df.loc[
-                ~genre_match,
-                "recommend_score"
-            ] -= 10
 
 
         # ====================================================
         # 자유 입력 키워드 반영
         # ====================================================
 
-        keywords = preference.lower().split()
+        keywords = (
+            preference
+            .lower()
+            .split()
+        )
 
 
         for index, row in result_df.iterrows():
@@ -628,50 +720,47 @@ if recommend_button:
 
             for keyword in keywords:
 
-                if len(keyword) >= 2:
+                if (
+                    len(keyword) >= 2
+                    and keyword
+                    in searchable_text
+                ):
 
-                    if keyword in searchable_text:
-
-                        result_df.at[
-                            index,
-                            "recommend_score"
-                        ] += 3
+                    result_df.at[
+                        index,
+                        "recommend_score"
+                    ] += 3
 
 
         # ====================================================
-        # 관객수는 작은 가산점으로만 반영
+        # 관객수를 약간 반영
         # ====================================================
 
-        max_audience = result_df["audiCnt"].max()
+        if not result_df.empty:
 
-
-        if max_audience > 0:
-
-            result_df["audience_score"] = (
-                result_df["audiCnt"]
-                / max_audience
-                * 2
+            max_audience = (
+                result_df["audiCnt"].max()
             )
 
-            result_df["recommend_score"] += (
-                result_df["audience_score"]
-            )
+            if max_audience > 0:
+
+                result_df[
+                    "audience_score"
+                ] = (
+                    result_df["audiCnt"]
+                    / max_audience
+                    * 2
+                )
+
+                result_df[
+                    "recommend_score"
+                ] += result_df[
+                    "audience_score"
+                ]
 
 
         # ====================================================
-        # 장르를 선택했다면
-        # 해당 장르가 하나라도 맞는 영화만 표시
-        # ====================================================
-
-        if selected_genres:
-
-            result_df = result_df[
-                genre_match
-            ].copy()
-
-
-        # ====================================================
-        # 추천 결과 정렬
+        # 추천 영화 정렬
         # ====================================================
 
         result_df = result_df.sort_values(
@@ -684,36 +773,70 @@ if recommend_button:
 
 
         # ====================================================
-        # 추천 영화가 없는 경우
+        # 조건을 만족하는 영화가 없는 경우
         # ====================================================
 
         if result_df.empty:
 
-            st.warning(
-                "선택한 장르에 해당하는 어제의 박스오피스 영화가 없습니다."
-            )
+            if selected_genres:
+
+                selected_text = (
+                    " + ".join(
+                        selected_genres
+                    )
+                )
+
+                st.warning(
+                    f"현재 박스오피스에는 "
+                    f"'{selected_text}' "
+                    "장르를 모두 포함하는 영화가 없습니다."
+                )
+
+                st.info(
+                    "선택한 장르 중 일부를 해제하면 "
+                    "더 많은 영화를 찾을 수 있습니다."
+                )
+
+            else:
+
+                st.warning(
+                    "입력한 취향에 맞는 영화가 없습니다."
+                )
+
+
+        # ====================================================
+        # 추천 결과 표시
+        # ====================================================
 
         else:
 
-            # =================================================
-            # 추천 결과
-            # =================================================
-
-            st.markdown("### 🍿 이런 영화는 어떠세요?")
+            st.markdown(
+                "### 🍿 추천 영화"
+            )
 
 
-            recommendations = result_df.head(3)
+            # 최대 3편 표시
+
+            recommendations = (
+                result_df.head(3)
+            )
 
 
             for i, (_, movie) in enumerate(
                 recommendations.iterrows()
             ):
 
-                rank = i + 1
+                recommendation_number = (
+                    i + 1
+                )
 
-                movie_name = movie["movieNm"]
+                movie_name = movie[
+                    "movieNm"
+                ]
 
-                genres = movie["genres"]
+                genres = movie[
+                    "genres"
+                ]
 
                 audience = int(
                     movie["audiCnt"]
@@ -723,15 +846,21 @@ if recommend_button:
                     movie["scrnCnt"]
                 )
 
-                directors = movie["directors"]
+                directors = movie[
+                    "directors"
+                ]
 
 
                 st.markdown(
-                    f"### {rank}. 🎬 {movie_name}"
+                    f"### "
+                    f"{recommendation_number}. "
+                    f"🎬 {movie_name}"
                 )
 
 
-                col1, col2, col3 = st.columns(3)
+                col1, col2, col3 = (
+                    st.columns(3)
+                )
 
 
                 with col1:
@@ -769,10 +898,12 @@ if recommend_button:
 
 
 # ============================================================
-# 21. 전체 박스오피스 표
+# 22. 전체 박스오피스 표
 # ============================================================
 
-st.markdown("## 🎬 전체 박스오피스")
+st.markdown(
+    "## 🎬 전체 박스오피스"
+)
 
 
 table_df = df[
@@ -798,14 +929,17 @@ table_df.columns = [
 
 
 # ============================================================
-# 22. 개봉일 형식 변경
+# 23. 개봉일 형식 변경
 # ============================================================
 
 def format_open_date(value):
 
     value = str(value)
 
-    if len(value) == 8 and value.isdigit():
+    if (
+        len(value) == 8
+        and value.isdigit()
+    ):
 
         return (
             f"{value[:4]}-"
@@ -816,14 +950,17 @@ def format_open_date(value):
     return value
 
 
-table_df["개봉일"] = (
-    table_df["개봉일"]
-    .apply(format_open_date)
+table_df[
+    "개봉일"
+] = table_df[
+    "개봉일"
+].apply(
+    format_open_date
 )
 
 
 # ============================================================
-# 23. 숫자 천 단위 콤마
+# 24. 숫자에 천 단위 콤마
 # ============================================================
 
 for column in [
@@ -832,13 +969,17 @@ for column in [
     "스크린수"
 ]:
 
-    table_df[column] = table_df[column].apply(
+    table_df[
+        column
+    ] = table_df[
+        column
+    ].apply(
         lambda x: f"{int(x):,}"
     )
 
 
 # ============================================================
-# 24. 전체 표 출력
+# 25. 표 출력
 # ============================================================
 
 st.dataframe(
@@ -849,7 +990,7 @@ st.dataframe(
 
 
 # ============================================================
-# 25. 출처
+# 26. 출처
 # ============================================================
 
 st.divider()
