@@ -1,30 +1,24 @@
 import json
 import re
-import html
 import streamlit as st
+import streamlit.components.v1 as components
 from openai import OpenAI
 
 
 # ============================================================
-# 아인슈타인 - AI 추리 게임
-# 파일 위치: pages/chat.py
+# 기본 설정
 # ============================================================
-
-
-# ------------------------------------------------------------
-# 1. 페이지 설정
-# ------------------------------------------------------------
 
 st.set_page_config(
     page_title="아인슈타인",
     page_icon="🧠",
-    layout="centered"
+    layout="wide"
 )
 
 
-# ------------------------------------------------------------
-# 2. 기본 성격
-# ------------------------------------------------------------
+# ============================================================
+# AI 기본 성격
+# ============================================================
 
 DEFAULT_PERSONALITY = (
     "너는 중고등학생에게 설명하는 친절한 정보 선생님이야. "
@@ -33,29 +27,33 @@ DEFAULT_PERSONALITY = (
 )
 
 
-# ------------------------------------------------------------
-# 3. 말투 설정
-# ------------------------------------------------------------
+# ============================================================
+# 말투
+# ============================================================
 
 TONE_INSTRUCTIONS = {
     "친절한 선생님": (
-        "친절하고 차분하게 말해. "
-        "학생이 이해하기 쉽도록 설명해."
+        "친절하고 차분하게 설명한다. "
+        "학생이 이해하기 쉬운 표현을 사용한다."
     ),
+
     "시크한 전문가": (
-        "군더더기 없이 핵심을 정확하게 말해. "
-        "논리적이고 깔끔하게 설명해."
+        "간결하고 논리적으로 말한다. "
+        "불필요한 설명은 줄이고 핵심을 정확하게 전달한다."
     ),
+
     "되물어보는 조교": (
-        "학생이 스스로 생각할 수 있도록 질문 중심으로 진행해. "
-        "정답을 너무 빨리 알려주지 말고 필요한 경우 힌트를 줘."
+        "학생이 스스로 생각하도록 유도한다. "
+        "정답을 바로 말하지 않는다. "
+        "필요하면 힌트를 하나만 주고 학생에게 다시 질문한다. "
+        "학생이 자신의 답을 말하면 그 답을 확인해 준다."
     )
 }
 
 
-# ------------------------------------------------------------
-# 4. Gemini API 연결
-# ------------------------------------------------------------
+# ============================================================
+# Gemini API 연결
+# ============================================================
 
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
@@ -72,9 +70,9 @@ except Exception:
     st.stop()
 
 
-# ------------------------------------------------------------
-# 5. 게임 상태 초기화
-# ------------------------------------------------------------
+# ============================================================
+# 세션 상태
+# ============================================================
 
 if "game_started" not in st.session_state:
     st.session_state.game_started = False
@@ -99,485 +97,161 @@ if "current_guess" not in st.session_state:
 
 
 # ============================================================
-# 6. 아인슈타인 테마 CSS
+# 전체 배경 CSS
 # ============================================================
 
 st.markdown(
     """
     <style>
 
-    /* 전체 배경 */
     .stApp {
         background:
             radial-gradient(
                 circle at 50% 10%,
-                rgba(255, 211, 128, 0.13),
-                transparent 30%
+                rgba(196, 151, 76, 0.13),
+                transparent 35%
             ),
             linear-gradient(
                 135deg,
-                #17120e 0%,
-                #2b2118 50%,
-                #100d0a 100%
+                #0b0a09,
+                #211812 45%,
+                #0c0b0a
             );
-        color: #f5ead7;
     }
 
-    /* 중앙 콘텐츠 크기 */
     .block-container {
-        max-width: 900px;
-        padding-top: 1.5rem;
+        padding-top: 1rem;
         padding-bottom: 3rem;
+        max-width: 1100px;
     }
 
-    /* 사이드바 */
     section[data-testid="stSidebar"] {
         background:
             linear-gradient(
                 180deg,
-                #17120e,
-                #251c15
+                #110e0c,
+                #1d1510
             );
-        border-right: 1px solid rgba(230, 190, 110, 0.2);
     }
 
-    /* 메인 제목 */
-    .einstein-title {
+    /* 제목 */
+    .title {
         text-align: center;
-        color: #e8c77e;
+        color: #e5c17b;
         font-family: Georgia, serif;
         font-size: 4rem;
-        font-weight: bold;
-        letter-spacing: 0.08em;
+        font-weight: 700;
+        letter-spacing: 8px;
         margin-bottom: 0;
-        text-shadow: 0 3px 15px rgba(0, 0, 0, 0.5);
+        text-shadow: 0 4px 20px rgba(0,0,0,0.6);
     }
 
-    .einstein-subtitle {
+    .subtitle {
         text-align: center;
-        color: #bba98f;
+        color: #9d8a70;
         font-family: Georgia, serif;
-        margin-bottom: 22px;
-    }
-
-    /* 연구실 */
-    .lab {
-        position: relative;
-        height: 330px;
-        overflow: hidden;
-        border-radius: 24px;
-        border: 1px solid rgba(232, 199, 126, 0.28);
-        background:
-            linear-gradient(
-                rgba(25, 19, 14, 0.18),
-                rgba(10, 8, 6, 0.65)
-            ),
-            repeating-linear-gradient(
-                90deg,
-                rgba(255,255,255,0.025) 0px,
-                rgba(255,255,255,0.025) 2px,
-                transparent 2px,
-                transparent 70px
-            ),
-            linear-gradient(
-                #3a2d23,
-                #17120e
-            );
-        box-shadow:
-            0 20px 50px rgba(0, 0, 0, 0.5);
-        margin-bottom: 20px;
-    }
-
-    /* 창문 */
-    .window {
-        position: absolute;
-        left: 25px;
-        top: 25px;
-        width: 180px;
-        height: 125px;
-        border: 8px solid #533b28;
-        background:
-            linear-gradient(
-                135deg,
-                #3d4d55,
-                #9aa6a7,
-                #34434b
-            );
-        box-shadow:
-            inset 0 0 30px rgba(0,0,0,0.5);
-    }
-
-    .window:before {
-        content: "";
-        position: absolute;
-        left: 50%;
-        top: 0;
-        bottom: 0;
-        width: 5px;
-        background: #533b28;
-        transform: translateX(-50%);
-    }
-
-    .window:after {
-        content: "";
-        position: absolute;
-        top: 50%;
-        left: 0;
-        right: 0;
-        height: 5px;
-        background: #533b28;
-        transform: translateY(-50%);
-    }
-
-    /* 칠판 */
-    .blackboard {
-        position: absolute;
-        left: 230px;
-        top: 25px;
-        width: 310px;
-        height: 145px;
-        background:
-            linear-gradient(
-                135deg,
-                #17251d,
-                #26372b
-            );
-        border: 9px solid #513b27;
-        border-radius: 6px;
-        box-shadow:
-            0 10px 20px rgba(0,0,0,0.4);
-        padding: 15px;
-        box-sizing: border-box;
-    }
-
-    .formula {
-        color: #d8dfcb;
-        font-family: Georgia, serif;
-        font-size: 18px;
-        line-height: 1.8;
-        transform: rotate(-1deg);
-    }
-
-    /* 책상 */
-    .desk {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 65px;
-        background:
-            linear-gradient(
-                #714c2c,
-                #3b2517
-            );
-        border-top: 9px solid #94663c;
-    }
-
-    /* 아인슈타인 캐릭터 */
-    .einstein {
-        position: absolute;
-        right: 35px;
-        bottom: 38px;
-        width: 245px;
-        height: 270px;
-        filter:
-            drop-shadow(
-                0 15px 12px rgba(0,0,0,0.5)
-            );
-    }
-
-    /* 머리카락 */
-    .hair {
-        position: absolute;
-        left: 48px;
-        top: 5px;
-        width: 150px;
-        height: 75px;
-        background: #eee9dc;
-        border-radius: 55% 45% 40% 50%;
-        box-shadow:
-            -25px 17px 0 #eee9dc,
-            22px 10px 0 #eee9dc,
-            2px -12px 0 #eee9dc;
-        z-index: 3;
-    }
-
-    /* 얼굴 */
-    .face {
-        position: absolute;
-        left: 65px;
-        top: 43px;
-        width: 120px;
-        height: 145px;
-        background: #d8a97c;
-        border: 3px solid #80583d;
-        border-radius: 48% 48% 45% 45%;
-        z-index: 2;
-    }
-
-    /* 귀 */
-    .ear {
-        position: absolute;
-        top: 100px;
-        width: 25px;
-        height: 45px;
-        background: #d8a97c;
-        border: 3px solid #80583d;
-        border-radius: 50%;
-        z-index: 1;
-    }
-
-    .ear.left {
-        left: 52px;
-    }
-
-    .ear.right {
-        left: 172px;
-    }
-
-    /* 눈 */
-    .eye {
-        position: absolute;
-        top: 91px;
-        width: 12px;
-        height: 7px;
-        background: #2c211b;
-        border-radius: 50%;
-        z-index: 4;
-    }
-
-    .eye.left {
-        left: 98px;
-    }
-
-    .eye.right {
-        left: 143px;
-    }
-
-    /* 안경 */
-    .glasses {
-        position: absolute;
-        top: 82px;
-        left: 91px;
-        width: 75px;
-        height: 32px;
-        z-index: 5;
-    }
-
-    .glasses:before,
-    .glasses:after {
-        content: "";
-        position: absolute;
-        width: 31px;
-        height: 25px;
-        border: 3px solid #30251d;
-        border-radius: 50%;
-    }
-
-    .glasses:before {
-        left: 0;
-    }
-
-    .glasses:after {
-        right: 0;
-    }
-
-    /* 콧수염 */
-    .mustache {
-        position: absolute;
-        left: 92px;
-        top: 120px;
-        width: 68px;
-        height: 30px;
-        background: #eee9dc;
-        border-radius: 50%;
-        z-index: 5;
-    }
-
-    /* 몸 */
-    .body {
-        position: absolute;
-        left: 48px;
-        top: 175px;
-        width: 165px;
-        height: 125px;
-        background:
-            linear-gradient(
-                90deg,
-                #292929,
-                #555555,
-                #292929
-            );
-        border-radius: 55px 55px 10px 10px;
-        z-index: 1;
-    }
-
-    /* 손 */
-    .hand {
-        position: absolute;
-        left: 10px;
-        top: 185px;
-        width: 82px;
-        height: 23px;
-        background: #d8a97c;
-        border-radius: 20px;
-        transform: rotate(-12deg);
-        z-index: 4;
-    }
-
-    /* 생각 중 표시 */
-    .thought {
-        position: absolute;
-        right: 210px;
-        top: 20px;
-        background: #f2eadc;
-        color: #2b2119;
-        padding: 13px 18px;
-        border-radius: 20px;
-        font-family: Georgia, serif;
-        font-size: 16px;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.35);
-    }
-
-    .thought:after {
-        content: "";
-        position: absolute;
-        right: -8px;
-        bottom: 10px;
-        width: 18px;
-        height: 18px;
-        background: #f2eadc;
-        transform: rotate(45deg);
+        letter-spacing: 3px;
+        margin-bottom: 25px;
     }
 
     /* 질문 카드 */
-    .question-card {
+    .question-box {
         background:
             linear-gradient(
                 145deg,
-                rgba(61, 47, 34, 0.97),
-                rgba(29, 23, 18, 0.97)
+                rgba(47, 36, 27, 0.97),
+                rgba(22, 18, 15, 0.98)
             );
-        border: 1px solid rgba(232, 199, 126, 0.25);
-        border-radius: 22px;
-        padding: 28px;
+
+        border: 1px solid rgba(229, 193, 123, 0.28);
+        border-radius: 20px;
+
+        padding: 30px;
+
+        margin-top: 20px;
+
         text-align: center;
+
         box-shadow:
-            0 15px 40px rgba(0,0,0,0.4);
-        margin-bottom: 18px;
+            0 15px 40px rgba(0,0,0,0.35);
     }
 
-    .question-label {
-        color: #caa85f;
+    .question-number {
+        color: #c8a15d;
         font-size: 13px;
-        letter-spacing: 0.16em;
-        margin-bottom: 10px;
+        letter-spacing: 4px;
+        margin-bottom: 12px;
     }
 
     .question-text {
-        color: #fff4df;
-        font-family: Georgia, serif;
-        font-size: 25px;
-        font-weight: bold;
+        color: #fff2d7;
+        font-size: 26px;
+        font-weight: 600;
         line-height: 1.5;
     }
 
-    /* 추측 결과 */
-    .guess-card {
+    /* 추측 */
+    .guess-box {
         background:
             linear-gradient(
                 145deg,
-                rgba(77, 58, 35, 0.98),
-                rgba(35, 27, 20, 0.98)
+                rgba(71, 53, 31, 0.98),
+                rgba(29, 22, 17, 0.98)
             );
-        border: 1px solid rgba(232, 199, 126, 0.4);
-        border-radius: 22px;
-        padding: 30px;
+
+        border: 1px solid rgba(229, 193, 123, 0.4);
+
+        border-radius: 20px;
+
+        padding: 35px;
+
         text-align: center;
-        margin-bottom: 20px;
+
         box-shadow:
-            0 15px 45px rgba(0,0,0,0.45);
+            0 20px 50px rgba(0,0,0,0.4);
     }
 
     .guess-small {
-        color: #d1b36d;
-        font-size: 14px;
-        letter-spacing: 0.15em;
+        color: #cba75f;
+        letter-spacing: 4px;
+        font-size: 13px;
     }
 
-    .guess-answer {
+    .guess-name {
         color: #fff0c9;
         font-family: Georgia, serif;
-        font-size: 32px;
+        font-size: 34px;
         font-weight: bold;
-        margin-top: 12px;
+        margin-top: 15px;
     }
 
     /* 버튼 */
     .stButton > button {
-        min-height: 48px !important;
-        border-radius: 14px !important;
-        border: 1px solid rgba(232, 199, 126, 0.28) !important;
+        min-height: 50px;
+        border-radius: 13px;
+
         background:
             linear-gradient(
                 145deg,
                 #493625,
-                #2d2219
-            ) !important;
-        color: #f8ead2 !important;
-        font-weight: 600 !important;
+                #2b2119
+            );
+
+        color: #f7ead2;
+
+        border: 1px solid rgba(229,193,123,0.3);
+
+        font-weight: 600;
     }
 
     .stButton > button:hover {
-        border-color: #d9b86c !important;
+        border-color: #e1bd72;
         background:
             linear-gradient(
                 145deg,
-                #5c432b,
-                #3b2b1e
-            ) !important;
-    }
-
-    /* 모바일 */
-    @media (max-width: 700px) {
-
-        .einstein-title {
-            font-size: 3rem;
-        }
-
-        .lab {
-            height: 300px;
-        }
-
-        .window {
-            width: 120px;
-            height: 90px;
-        }
-
-        .blackboard {
-            left: 160px;
-            width: 180px;
-            height: 110px;
-        }
-
-        .formula {
-            font-size: 12px;
-        }
-
-        .einstein {
-            right: -20px;
-            transform: scale(0.78);
-            transform-origin: bottom right;
-        }
-
-        .thought {
-            right: 120px;
-            font-size: 12px;
-        }
-
-        .question-text {
-            font-size: 20px;
-        }
+                #60472d,
+                #3b2b20
+            );
     }
 
     </style>
@@ -587,14 +261,14 @@ st.markdown(
 
 
 # ============================================================
-# 7. 아인슈타인 제목
+# 제목
 # ============================================================
 
 st.markdown(
     """
-    <div class="einstein-title">아인슈타인</div>
-    <div class="einstein-subtitle">
-        EINSTEIN · 논리로 답을 찾아내다
+    <div class="title">아인슈타인</div>
+    <div class="subtitle">
+        THE MIND THAT FINDS THE ANSWER
     </div>
     """,
     unsafe_allow_html=True
@@ -602,60 +276,449 @@ st.markdown(
 
 
 # ============================================================
-# 8. 아인슈타인 연구실
+# 실제 아인슈타인 사진
+#
+# Wikimedia Commons의 공개 도메인 사진
 # ============================================================
 
-st.markdown(
-    """
-    <div class="lab">
-
-        <div class="window"></div>
-
-        <div class="blackboard">
-            <div class="formula">
-                E = mc²<br>
-                상대성 이론<br>
-                F = ma<br>
-                ? → ? → ?
-            </div>
-        </div>
-
-        <div class="thought">
-            흠... 그렇다면?
-        </div>
-
-        <div class="einstein">
-
-            <div class="hair"></div>
-
-            <div class="ear left"></div>
-            <div class="ear right"></div>
-
-            <div class="face"></div>
-
-            <div class="eye left"></div>
-            <div class="eye right"></div>
-
-            <div class="glasses"></div>
-
-            <div class="mustache"></div>
-
-            <div class="body"></div>
-
-            <div class="hand"></div>
-
-        </div>
-
-        <div class="desk"></div>
-
-    </div>
-    """,
-    unsafe_allow_html=True
+EINSTEIN_IMAGE = (
+    "https://upload.wikimedia.org/"
+    "wikipedia/commons/"
+    "thumb/0/09/Einstein.jpg/"
+    "600px-Einstein.jpg"
 )
 
 
 # ============================================================
-# 9. 사이드바
+# 연구실 화면
+#
+# HTML을 st.components.v1.html로 렌더링해서
+# 코드가 화면에 그대로 출력되는 문제를 방지합니다.
+# ============================================================
+
+lab_html = f"""
+<!DOCTYPE html>
+
+<html>
+<head>
+
+<meta charset="UTF-8">
+
+<style>
+
+* {{
+    box-sizing: border-box;
+}}
+
+body {{
+    margin: 0;
+    background: transparent;
+    font-family: Georgia, serif;
+}}
+
+.scene {{
+    position: relative;
+
+    width: 100%;
+    height: 430px;
+
+    overflow: hidden;
+
+    border-radius: 24px;
+
+    background:
+        linear-gradient(
+            rgba(15, 11, 8, 0.25),
+            rgba(9, 7, 5, 0.75)
+        ),
+        radial-gradient(
+            circle at 50% 20%,
+            rgba(213, 166, 83, 0.18),
+            transparent 35%
+        ),
+        linear-gradient(
+            135deg,
+            #3b2c20,
+            #17110d
+        );
+
+    border: 1px solid rgba(229,193,123,0.28);
+
+    box-shadow:
+        0 25px 70px rgba(0,0,0,0.55);
+}}
+
+
+/* -------------------------------------------------
+   나무 벽
+------------------------------------------------- */
+
+.wall-lines {{
+    position: absolute;
+    inset: 0;
+
+    background:
+        repeating-linear-gradient(
+            90deg,
+            rgba(255,255,255,0.025) 0px,
+            rgba(255,255,255,0.025) 2px,
+            transparent 2px,
+            transparent 90px
+        );
+}}
+
+
+/* -------------------------------------------------
+   조명
+------------------------------------------------- */
+
+.lamp {{
+    position: absolute;
+
+    top: -30px;
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    width: 220px;
+    height: 180px;
+
+    background:
+        radial-gradient(
+            ellipse,
+            rgba(255,204,110,0.28),
+            transparent 65%
+        );
+
+    filter: blur(8px);
+}}
+
+
+/* -------------------------------------------------
+   칠판
+------------------------------------------------- */
+
+.board {{
+    position: absolute;
+
+    left: 35px;
+    top: 40px;
+
+    width: 45%;
+    height: 190px;
+
+    padding: 25px;
+
+    border-radius: 8px;
+
+    background:
+        linear-gradient(
+            135deg,
+            #17241c,
+            #26382b
+        );
+
+    border: 10px solid #60452d;
+
+    box-shadow:
+        0 15px 25px rgba(0,0,0,0.45);
+}}
+
+.formula {{
+    color: rgba(231,235,216,0.86);
+
+    font-size: 22px;
+
+    line-height: 1.8;
+
+    transform: rotate(-1deg);
+}}
+
+.small-formula {{
+    font-size: 15px;
+    opacity: 0.7;
+}}
+
+
+/* -------------------------------------------------
+   책상
+------------------------------------------------- */
+
+.desk {{
+    position: absolute;
+
+    left: 0;
+    right: 0;
+
+    bottom: 0;
+
+    height: 75px;
+
+    background:
+        linear-gradient(
+            #7a5430,
+            #3c2618
+        );
+
+    border-top: 8px solid #9a6b3e;
+
+    box-shadow:
+        0 -10px 25px rgba(0,0,0,0.45);
+}}
+
+
+/* -------------------------------------------------
+   책
+------------------------------------------------- */
+
+.book {{
+    position: absolute;
+
+    right: 50px;
+    bottom: 76px;
+
+    width: 115px;
+    height: 30px;
+
+    background: #c9a968;
+
+    border-radius: 3px;
+
+    transform: rotate(-5deg);
+
+    box-shadow:
+        0 5px 8px rgba(0,0,0,0.4);
+}}
+
+
+/* -------------------------------------------------
+   아인슈타인 사진
+------------------------------------------------- */
+
+.einstein-photo {{
+    position: absolute;
+
+    right: 55px;
+    bottom: 55px;
+
+    height: 350px;
+    width: 265px;
+
+    object-fit: cover;
+    object-position: center top;
+
+    border-radius: 8px;
+
+    filter:
+        grayscale(100%)
+        sepia(20%)
+        contrast(1.08)
+        brightness(0.82);
+
+    box-shadow:
+        0 20px 35px rgba(0,0,0,0.6);
+
+    border: 8px solid #e1d3b5;
+}}
+
+
+/* -------------------------------------------------
+   말풍선
+------------------------------------------------- */
+
+.thought {{
+    position: absolute;
+
+    right: 290px;
+    top: 35px;
+
+    background: #f5eee2;
+
+    color: #29211a;
+
+    padding: 15px 22px;
+
+    border-radius: 22px;
+
+    font-size: 17px;
+
+    box-shadow:
+        0 8px 20px rgba(0,0,0,0.35);
+}}
+
+.thought:after {{
+    content: "";
+
+    position: absolute;
+
+    right: -10px;
+    bottom: 10px;
+
+    width: 20px;
+    height: 20px;
+
+    background: #f5eee2;
+
+    transform: rotate(45deg);
+}}
+
+
+/* -------------------------------------------------
+   작은 장식
+------------------------------------------------- */
+
+.clock {{
+    position: absolute;
+
+    right: 350px;
+    top: 125px;
+
+    width: 60px;
+    height: 60px;
+
+    border-radius: 50%;
+
+    background: #e6d8bc;
+
+    border: 6px solid #63472e;
+
+    box-shadow:
+        0 5px 15px rgba(0,0,0,0.35);
+}}
+
+.clock:before {{
+    content: "";
+
+    position: absolute;
+
+    left: 50%;
+    top: 50%;
+
+    width: 20px;
+    height: 3px;
+
+    background: #38291e;
+
+    transform-origin: left center;
+    transform: rotate(-45deg);
+}}
+
+.clock:after {{
+    content: "";
+
+    position: absolute;
+
+    left: 50%;
+    top: 50%;
+
+    width: 16px;
+    height: 3px;
+
+    background: #38291e;
+
+    transform-origin: left center;
+    transform: rotate(55deg);
+}}
+
+
+@media(max-width:700px) {{
+
+    .scene {{
+        height: 360px;
+    }}
+
+    .board {{
+        left: 15px;
+        width: 52%;
+        height: 145px;
+    }}
+
+    .formula {{
+        font-size: 15px;
+    }}
+
+    .einstein-photo {{
+        right: 10px;
+        height: 285px;
+        width: 215px;
+    }}
+
+    .thought {{
+        right: 170px;
+        font-size: 12px;
+    }}
+
+}}
+
+</style>
+
+</head>
+
+
+<body>
+
+<div class="scene">
+
+    <div class="wall-lines"></div>
+
+    <div class="lamp"></div>
+
+    <div class="board">
+
+        <div class="formula">
+
+            E = mc²<br>
+
+            F = ma<br>
+
+            상대성 이론<br>
+
+            <span class="small-formula">
+                생각 → 질문 → 추론 → 정답
+            </span>
+
+        </div>
+
+    </div>
+
+
+    <div class="clock"></div>
+
+
+    <div class="thought">
+        흠... 이제 거의 다 왔군.
+    </div>
+
+
+    <img
+        class="einstein-photo"
+        src="{EINSTEIN_IMAGE}"
+        alt="Albert Einstein"
+    >
+
+
+    <div class="book"></div>
+
+
+    <div class="desk"></div>
+
+</div>
+
+</body>
+
+</html>
+"""
+
+
+components.html(
+    lab_html,
+    height=450,
+    scrolling=False
+)
+
+
+# ============================================================
+# 사이드바
 # ============================================================
 
 with st.sidebar:
@@ -679,8 +742,7 @@ with st.sidebar:
     personality = st.text_area(
         "아인슈타인의 성격",
         value=DEFAULT_PERSONALITY,
-        height=150,
-        help="이 내용은 AI에게만 전달됩니다."
+        height=150
     )
 
     st.divider()
@@ -700,28 +762,28 @@ with st.sidebar:
 
         st.rerun()
 
+
     if st.button(
         "🗑️ 대화 지우기",
         use_container_width=True
     ):
 
         st.session_state.game_history = []
-        st.session_state.question_number = 0
 
         st.rerun()
 
 
 # ============================================================
-# 10. 게임 시작 화면
+# 게임 시작 화면
 # ============================================================
 
 if not st.session_state.game_started:
 
     st.markdown(
         """
-        <div class="question-card">
+        <div class="question-box">
 
-            <div class="question-label">
+            <div class="question-number">
                 EINSTEIN'S THINKING ROOM
             </div>
 
@@ -729,8 +791,8 @@ if not st.session_state.game_started:
                 머릿속으로 하나를 정해 보세요.
             </div>
 
-            <div style="color:#bca98e; margin-top:12px;">
-                아인슈타인이 질문을 통해 정답을 추리합니다.
+            <div style="color:#a9967c; margin-top:12px;">
+                아인슈타인이 질문을 하나씩 던지며 정답을 찾아냅니다.
             </div>
 
         </div>
@@ -754,7 +816,7 @@ if not st.session_state.game_started:
     )
 
     if st.button(
-        "🧠 아인슈타인에게 추리 맡기기",
+        "🧠 추리 시작",
         type="primary",
         use_container_width=True
     ):
@@ -762,7 +824,7 @@ if not st.session_state.game_started:
         st.session_state.game_started = True
         st.session_state.game_finished = False
         st.session_state.game_topic = topic
-        st.session_state.question_number = 0
+        st.session_state.question_number = 1
         st.session_state.game_history = []
         st.session_state.current_guess = ""
 
@@ -773,19 +835,19 @@ if not st.session_state.game_started:
             try:
 
                 prompt = f"""
-너는 아인슈타인처럼 논리적으로 생각하는 추리 게임 AI다.
-
 사용자가 '{topic}' 중 하나를 머릿속으로 정했다.
 
 아직 아무 정보도 없다.
 
-후보를 크게 나눌 수 있는 첫 번째 질문을 만들어라.
+정답 후보를 크게 나눌 수 있는
+첫 번째 질문 하나를 만들어라.
 
-규칙:
-- 예/아니오/잘 모르겠어요로 대답할 수 있어야 한다.
-- 질문 하나만 출력한다.
-- 설명하지 않는다.
-- 반드시 한국어로 출력한다.
+질문은 예, 아니오, 잘 모르겠어요로
+대답할 수 있어야 한다.
+
+질문 하나만 출력한다.
+
+한국어로만 출력한다.
 """
 
                 response = client.chat.completions.create(
@@ -793,7 +855,11 @@ if not st.session_state.game_started:
                     messages=[
                         {
                             "role": "system",
-                            "content": personality
+                            "content": (
+                                personality
+                                + "\n\n"
+                                + TONE_INSTRUCTIONS[selected_tone]
+                            )
                         },
                         {
                             "role": "user",
@@ -808,44 +874,39 @@ if not st.session_state.game_started:
                     .strip()
                 )
 
-                question = question.strip('"').strip("'")
-
                 st.session_state.current_question = question
-                st.session_state.question_number = 1
 
                 st.rerun()
 
             except Exception:
 
                 st.warning(
-                    "아인슈타인이 질문을 준비하는 중 문제가 생겼어요. 다시 시도해 주세요."
+                    "아인슈타인이 질문을 준비하지 못했어요. 다시 시도해 주세요."
                 )
 
     st.stop()
 
 
 # ============================================================
-# 11. 현재 질문 화면
+# 현재 질문
+#
+# HTML을 사용하지 않고 Streamlit로 직접 출력합니다.
 # ============================================================
-
-safe_question = html.escape(
-    st.session_state.current_question
-)
 
 st.markdown(
     f"""
-    <div class="question-card">
+    <div class="question-box">
 
-        <div class="question-label">
+        <div class="question-number">
             QUESTION {st.session_state.question_number}
         </div>
 
         <div class="question-text">
-            {safe_question}
+            {st.session_state.current_question}
         </div>
 
-        <div style="color:#bca98e; margin-top:12px;">
-            아인슈타인이 논리적으로 범위를 좁히고 있습니다.
+        <div style="color:#a9967c; margin-top:12px;">
+            아인슈타인이 범위를 좁히고 있습니다.
         </div>
 
     </div>
@@ -855,14 +916,12 @@ st.markdown(
 
 
 # ============================================================
-# 12. 지금까지의 추리 과정
+# 추리 기록
 # ============================================================
 
 if st.session_state.game_history:
 
-    with st.expander(
-        "📜 지금까지의 추리 과정"
-    ):
+    with st.expander("📜 지금까지의 추리 과정"):
 
         for i, item in enumerate(
             st.session_state.game_history,
@@ -879,26 +938,21 @@ if st.session_state.game_history:
 
 
 # ============================================================
-# 13. AI가 정답을 추측한 경우
+# 정답 추측
 # ============================================================
 
 if st.session_state.game_finished:
 
-    safe_guess = html.escape(
-        st.session_state.current_guess
-    )
-
     st.markdown(
         f"""
-        <div class="guess-card">
+        <div class="guess-box">
 
             <div class="guess-small">
                 EINSTEIN HAS A THEORY
             </div>
 
-            <div class="guess-answer">
-                제 추측은<br>
-                「{safe_guess}」입니다.
+            <div class="guess-name">
+                「{st.session_state.current_guess}」
             </div>
 
         </div>
@@ -906,9 +960,7 @@ if st.session_state.game_finished:
         unsafe_allow_html=True
     )
 
-    st.write(
-        "아인슈타인의 추측이 맞나요?"
-    )
+    st.write("아인슈타인의 추측이 맞나요?")
 
     col1, col2 = st.columns(2)
 
@@ -922,7 +974,7 @@ if st.session_state.game_finished:
             st.balloons()
 
             st.success(
-                "아인슈타인이 정답을 찾아냈습니다! 🎉"
+                "아인슈타인이 정답을 찾아냈습니다!"
             )
 
     with col2:
@@ -943,15 +995,15 @@ if st.session_state.game_finished:
 
 
 # ============================================================
-# 14. 답변 버튼
+# 답변 버튼
 # ============================================================
 
 st.markdown(
     """
     <div style="
         text-align:center;
-        color:#bca98e;
-        margin-bottom:10px;
+        color:#a9967c;
+        margin:18px 0 10px 0;
     ">
         아인슈타인의 질문에 답해주세요.
     </div>
@@ -996,24 +1048,18 @@ with col3:
 
 
 # ============================================================
-# 15. 답변 처리
+# 답변 처리
 # ============================================================
 
 if answer:
 
-    current_question = st.session_state.current_question
-
     st.session_state.game_history.append(
         {
-            "question": current_question,
+            "question": st.session_state.current_question,
             "answer": answer
         }
     )
 
-
-    # --------------------------------------------------------
-    # 지금까지의 기록을 AI가 읽을 수 있도록 정리
-    # --------------------------------------------------------
 
     history_text = ""
 
@@ -1029,7 +1075,7 @@ if answer:
 
 
     # --------------------------------------------------------
-    # AI에게 다음 행동 요청
+    # 다음 질문 또는 정답 추측
     # --------------------------------------------------------
 
     prompt = f"""
@@ -1038,7 +1084,7 @@ if answer:
 사용자는 '{st.session_state.game_topic}' 중 하나를
 머릿속으로 정했다.
 
-지금까지의 추리 기록:
+지금까지의 기록:
 
 {history_text}
 
@@ -1046,25 +1092,25 @@ if answer:
 
 규칙:
 
-1. 후보를 최대한 효율적으로 줄여라.
-2. 이미 물어본 질문과 거의 같은 질문은 하지 마라.
-3. '잘 모르겠어요'는 확정 정보로 취급하지 마라.
-4. 충분한 정보가 모이면 정답을 추측하라.
-5. 아직 정보가 부족하면 새로운 질문을 하나만 하라.
+1. 지금까지의 답변을 반드시 모두 고려한다.
+2. 이미 물어본 질문은 반복하지 않는다.
+3. 후보를 효율적으로 좁힌다.
+4. 충분한 정보가 있으면 정답을 추측한다.
+5. 정보가 부족하면 새로운 질문을 하나 한다.
 6. 질문은 예/아니오/잘 모르겠어요로 답할 수 있어야 한다.
-7. 추측할 때는 가장 가능성이 높은 대상 하나만 말한다.
-8. 반드시 한국어로 답한다.
+7. 정답을 추측할 때는 하나만 선택한다.
+8. 반드시 한국어로 출력한다.
 
-반드시 아래 JSON 형식으로만 답하라.
+JSON 형식으로만 답한다.
 
-다음 질문을 할 경우:
+질문:
 
 {{
     "action": "QUESTION",
     "content": "질문 내용"
 }}
 
-정답을 추측할 경우:
+정답 추측:
 
 {{
     "action": "GUESS",
@@ -1072,10 +1118,6 @@ if answer:
 }}
 """
 
-
-    # --------------------------------------------------------
-    # Gemini 호출
-    # --------------------------------------------------------
 
     with st.spinner(
         "🧠 아인슈타인이 생각하고 있습니다..."
@@ -1109,10 +1151,7 @@ if answer:
             )
 
 
-            # ------------------------------------------------
-            # AI가 JSON을 코드블록으로 감쌀 경우 제거
-            # ------------------------------------------------
-
+            # AI가 JSON을 코드블록으로 보내는 경우 제거
             result_text = re.sub(
                 r"```json\s*",
                 "",
@@ -1127,11 +1166,8 @@ if answer:
             ).strip()
 
 
-            # ------------------------------------------------
-            # JSON 해석
-            # ------------------------------------------------
-
             result = json.loads(result_text)
+
 
             action = result.get(
                 "action",
@@ -1150,11 +1186,6 @@ if answer:
 
             if action == "QUESTION":
 
-                if not content:
-                    raise ValueError(
-                        "질문이 없습니다."
-                    )
-
                 st.session_state.current_question = content
 
                 st.session_state.question_number += 1
@@ -1163,15 +1194,10 @@ if answer:
 
 
             # ------------------------------------------------
-            # 정답 추측
+            # 정답
             # ------------------------------------------------
 
             elif action == "GUESS":
-
-                if not content:
-                    raise ValueError(
-                        "추측 결과가 없습니다."
-                    )
 
                 st.session_state.current_guess = content
 
@@ -1180,15 +1206,9 @@ if answer:
                 st.rerun()
 
 
-            # ------------------------------------------------
-            # 잘못된 응답
-            # ------------------------------------------------
-
             else:
 
-                raise ValueError(
-                    "AI 응답 형식이 올바르지 않습니다."
-                )
+                raise ValueError()
 
 
         except Exception:
